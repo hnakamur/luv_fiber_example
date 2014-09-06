@@ -10,7 +10,7 @@ local fibered = fiber.new(function (wait, await)
   local code, signal = await(process.spawn("pwd", {}, options))
   p{cmd="pwd", code=code, signal=signal}
 
-  local code, signal = await(process.spawn("ls", {"-l"}, options))
+  code, signal = await(process.spawn("ls", {"-l"}, options))
   return {code=code, signal=signal}
 end)
 
