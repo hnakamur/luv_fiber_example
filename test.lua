@@ -1,53 +1,27 @@
+local uv = require('luv')
 local fs = require('file')
 local fiber = require('wait')
+local p = require('lib/utils').prettyPrint
 
-local input = __filename
-local output = __filename .. ".out"
-local output2 = __filename .. ".out2"
+local filename = "test.lua"
+local input = filename
+local output = filename .. ".out"
 
--- Create a normal continuable using callbacks
-local normal = function (callback)
-  fs.open(input, "r")(function (err, fd)
-    if err then return callback(err) end
-    local readable = fs.ReadStream:new(fd)
-    fs.open(output, "w")(function (err, fd)
-      if err then return callback(err) end
-      local writable = fs.WriteStream:new(fd)
-      local consume, onRead, onDone
-      consume = function (err)
-        if err then return callback(err) end
-        readable:read()(onRead)
-      end
-      onRead = function (err, chunk)
-        if err then return callback(err) end
-        return writable:write(chunk)(chunk and consume or onDone)
-      end
-      onDone = function (err)
-        if err then return callback(err) end
-        callback(nil, "done")
-      end
-      consume()
-    end)
-  end)
-end
-
--- Create another that runs in a coroutine
 local fibered = fiber.new(function (wait, await)
-  local readable = fs.ReadStream:new(await(fs.open(input, "r")))
-  local writable = fs.WriteStream:new(await(fs.open(output2, "w")))
+  local rfd = await(fs.open(input, "r"))
+  local wfd = await(fs.open(output, "w"))
+  local roff = 0
   repeat
-    local chunk = await(readable:read())
-    await(writable:write(chunk))
-  until not chunk
-  return "done2"
+    local chunk = await(fs.read(rfd, 4096, roff))
+    roff = roff + #chunk
+    await(fs.write(wfd, chunk, 0))
+  until #chunk == 0
+  return "done"
 end)
 
--- Run the normal one
-normal(function (err, message)
-  p{name="normal", err=err, message=message}
-end)
-
--- Also run the fibered one in parallel
 fibered(function (err, message)
   p{name="fibered", err=err, message=message}
 end)
+
+repeat
+until uv.run("once") == 0
